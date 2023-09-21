@@ -1,0 +1,31 @@
+#
+# xpost.py configuration file
+#
+# An example configuration file. It should be placed in your home directory as `.xpostrc`
+#
+
+[[mastodon]]
+user = "user1@email.com"
+password = "password"
+api_base_url = "https://mastodon.social"
+client_key = "SECRET"
+client_secret = "SECRET"
+access_token = "SECRET"
+
+[[mastodon]]
+user = "user2@email.com"
+password = "password"
+api_base_url = "https://mastodon.social"
+client_key = "SECRET"
+client_secret = "SECRET"
+access_token = "SECRET"
+
+[[twitter]]
+user = "twit"
+api_key = "SECRET"
+api_secret = "SECRET"
+bearer_token = "SECRET"
+access_token = "SECRET"
+access_token_secret = "SECRET"
+
+# vim: set filetype=toml:

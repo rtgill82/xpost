@@ -1,33 +1,15 @@
 #!/usr/bin/python
 
 import argparse
+import os
 import sys
+import tomllib
 
 import mastodon
 import tweepy
 
-MASTODON_USER = 'USERNAME'
-MASTODON_PASSWORD = 'PASSWORD'
-MASTODON_TOKENS = {
-        'api_base_url': 'https://mastodon.social',
-        'access_token': 'SECRET',
-        'client_id': 'SECRET',
-        'client_secret': 'SECRET'
-}
-
-TWITTER_TOKENS = {
-        'bearer_token': 'SECRET',
-        'consumer_key': 'SECRET',
-        'consumer_secret': 'SECRET',
-        'access_token': 'SECRET',
-        'access_token_secret': 'SECRET'
-}
-
 class Post:
     def __init__(self, text):
-        if len(text) > 280:
-            raise RuntimeError('message length is limited to 280 characters')
-
         self.__text = text
         self.__images = None
 
@@ -48,13 +30,23 @@ class Post:
         return self.__text
 
 class SocialNetwork:
+    CHAR_LIMIT = 0
+    IMAGE_LIMIT = 0
+
     def __init__(self):
         self.__posts = []
 
     def add_image(self, image):
+        if len(self.__posts[0].images()) > self.IMAGE_LIMIT:
+            raise RuntimeError(f'image attachments are limited to { self.IMAGE_LIMIT } images')
         self.__posts[0].add_image(image)
 
+    def limit(self):
+        return self.CHAR_LIMIT
+
     def post(self, post):
+        if len(post.text()) > self.CHAR_LIMIT:
+            raise RuntimeError(f'message length is limited to { self.CHAR_LIMIT } characters')
         self.__posts.append(post)
 
     def posts(self):
@@ -62,17 +54,22 @@ class SocialNetwork:
 
 
 class Mastodon(SocialNetwork):
+    CHAR_LIMIT = 500
+    IMAGE_LIMIT = 4
+
     SCOPES = ['write:media', 'write:statuses']
 
-    def __init__(self, user, password, tokens):
+    def __init__(self, config):
         super().__init__()
-        self.client = mastodon.Mastodon(**tokens)
-        self.client.log_in(user, password, scopes = Mastodon.SCOPES)
+        self.__user = config.user()
+        self.__client = mastodon.Mastodon(**config.tokens())
+        self.__client.log_in(self.__user, config.password(),
+                             scopes = Mastodon.SCOPES)
 
     def publish(self):
         reply_id = None
         for post in self.posts():
-            response = self.client.status_post(
+            response = self.__client.status_post(
                     post.text(),
                     in_reply_to_id = reply_id,
                     media_ids = self.__upload(post)
@@ -86,22 +83,49 @@ class Mastodon(SocialNetwork):
             media_ids = []
 
             for image in images:
-                media = self.client.media_post(image)
+                media = self.__client.media_post(image)
                 media_ids.append(media.id)
 
         return media_ids
 
+    def __str__(self):
+        return f'{ self.__user }@Mastodon'
+
+    class Config:
+        def __init__(self, **kwargs):
+            self.__user = kwargs['user']
+            self.__password = kwargs['password']
+            self.__tokens = {
+                'api_base_url': kwargs['api_base_url'],
+                'client_id': kwargs['client_key'],
+                'client_secret': kwargs['client_secret'],
+                'access_token': kwargs['access_token'],
+            }
+
+        def user(self):
+            return self.__user
+
+        def password(self):
+            return self.__password
+
+        def tokens(self):
+            return self.__tokens
+
 
 class Twitter(SocialNetwork):
-    def __init__(self, tokens):
+    CHAR_LIMIT = 500
+    IMAGE_LIMIT = 4
+
+    def __init__(self, config):
         super().__init__()
-        self.tokens = tokens
-        self.client = tweepy.Client(**tokens)
+        self.__user = config.user()
+        self.__tokens = config.tokens()
+        self.__client = tweepy.Client(**tokens)
 
     def publish(self):
         reply_id = None
         for post in self.posts():
-            response = self.client.create_tweet(
+            response = self.__client.create_tweet(
                     text = post.text(),
                     in_reply_to_tweet_id = reply_id,
                     media_ids = self.__upload(post)
@@ -113,12 +137,12 @@ class Twitter(SocialNetwork):
         images = post.images()
         if images:
             auth = tweepy.OAuthHandler(
-                    self.tokens['consumer_key'],
-                    self.tokens['consumer_secret']
+                    self.__tokens['consumer_key'],
+                    self.__tokens['consumer_secret']
                     )
             auth.set_access_token(
-                    self.tokens['access_token'],
-                    self.tokens['access_token_secret']
+                    self.__tokens['access_token'],
+                    self.__tokens['access_token_secret']
                     )
             api = tweepy.API(auth)
 
@@ -128,6 +152,47 @@ class Twitter(SocialNetwork):
                 media_ids.append(media.media_id)
 
         return media_ids
+
+    def __str__(self):
+        return f'{ self.__user }@Twitter'
+
+    class Config:
+        def __init__(self, **kwargs):
+            self.__tokens = {
+                'user': kwargs['user'],
+                'consumer_key': kwargs['api_key'],
+                'consumer_secret': kwargs['api_secret'],
+                'bearer_token': kwargs['bearer_token'],
+                'access_token': kwargs['access_token'],
+                'access_token_secret': kwargs['access_token_secret']
+            }
+
+        def user(self):
+            return self.__tokens['user']
+
+        def tokens(self):
+            return self.__tokens
+
+def read_config():
+    accounts = []
+    home = os.getenv('HOME')
+    if home == None:
+        print('Unable to locate HOME directory.')
+        sys.exit(1)
+    path = f"{ home }/.xpostrc"
+    with open(f'{ home }/.xpostrc', 'rb') as f:
+        data = tomllib.load(f)
+        if 'mastodon' in data:
+            for account in data['mastodon']:
+                config = Mastodon.Config(**account)
+                accounts.append(Mastodon(config))
+
+        if 'twitter' in data:
+            for account in data['twitter']:
+                config = Twitter.Config(**account)
+                accounts.append(Twitter(config))
+
+    return accounts
 
 def read_messages():
     message = ''
@@ -150,16 +215,15 @@ parser = argparse.ArgumentParser(
 parser.add_argument('-i', '--image', help = 'attach an image to post')
 args = parser.parse_args()
 
-mastodon = Mastodon(MASTODON_USER, MASTODON_PASSWORD, MASTODON_TOKENS)
-twitter = Twitter(TWITTER_TOKENS)
+accounts = read_config()
 
 for post in read_messages():
-    mastodon.post(post)
-    twitter.post(post)
+    for account in accounts:
+        account.post(post)
 
 if args.image:
-    twitter.add_image(args.image)
-    mastodon.add_image(args.image)
+    for account in accounts:
+        account.add_image(args.image)
 
-mastodon.publish()
-twitter.publish()
+for account in accounts:
+    account.publish()
