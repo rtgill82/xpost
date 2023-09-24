@@ -1,171 +1,40 @@
 #!/usr/bin/python
+#
+# Copyright (c) 2022,2023 Robert Gill <rtgill82@gmail.com>
+#
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted provided that the following conditions are met:
+#
+# 1. Redistributions of source code must retain the above copyright notice, this
+#    list of conditions and the following disclaimer.
+#
+# 2. Redistributions in binary form must reproduce the above copyright notice,
+#    this list of conditions and the following disclaimer in the documentation
+#    and/or other materials provided with the distribution.
+#
+# 3. Neither the name of the copyright holder nor the names of its
+#    contributors may be used to endorse or promote products derived from
+#    this software without specific prior written permission.
+#
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+# AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+# IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+# DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+# FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+# DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+# SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+# CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+# OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+# OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+#
 
 import argparse
 import os
 import sys
 import tomllib
 
-import mastodon
-import tweepy
+from xpost import Mastodon, Post, Twitter
 
-class Post:
-    def __init__(self, text):
-        self.__text = text
-        self.__images = []
-
-    def add_image(self, image):
-        if image not in self.__images:
-            self.__images.append(image)
-
-    def images(self):
-        return self.__images
-
-    def text(self):
-        return self.__text
-
-class SocialNetwork:
-    CHAR_LIMIT = 0
-    IMAGE_LIMIT = 0
-
-    def __init__(self):
-        self.__posts = []
-
-    def add_image(self, image):
-        if len(self.__posts[0].images()) > self.IMAGE_LIMIT:
-            raise RuntimeError(f'Image attachments are limited to { self.IMAGE_LIMIT } images.')
-        self.__posts[0].add_image(image)
-
-    def limit(self):
-        return self.CHAR_LIMIT
-
-    def post(self, post):
-        if len(post.text()) > self.CHAR_LIMIT:
-            raise RuntimeError(f'Message length is limited to { self.CHAR_LIMIT } characters.')
-        self.__posts.append(post)
-
-    def posts(self):
-        return self.__posts
-
-
-class Mastodon(SocialNetwork):
-    CHAR_LIMIT = 500
-    IMAGE_LIMIT = 4
-
-    SCOPES = ['write:media', 'write:statuses']
-
-    def __init__(self, config):
-        super().__init__()
-        self.__user = config.user()
-        self.__client = mastodon.Mastodon(**config.tokens())
-        self.__client.log_in(self.__user, config.password(),
-                             scopes = Mastodon.SCOPES)
-
-    def publish(self):
-        reply_id = None
-        for post in self.posts():
-            response = self.__client.status_post(
-                    post.text(),
-                    in_reply_to_id = reply_id,
-                    media_ids = self.__upload(post)
-                    )
-            reply_id = response.id
-
-    def __upload(self, post):
-        media_ids = None
-        images = post.images()
-        if images:
-            media_ids = []
-
-            for image in images:
-                media = self.__client.media_post(image)
-                media_ids.append(media.id)
-
-        return media_ids
-
-    def __str__(self):
-        return f'Mastodon Account: { self.__user }'
-
-    class Config:
-        def __init__(self, **kwargs):
-            self.__user = kwargs['user']
-            self.__password = kwargs['password']
-            self.__tokens = {
-                'api_base_url': kwargs['api_base_url'],
-                'client_id': kwargs['client_key'],
-                'client_secret': kwargs['client_secret'],
-                'access_token': kwargs['access_token'],
-            }
-
-        def user(self):
-            return self.__user
-
-        def password(self):
-            return self.__password
-
-        def tokens(self):
-            return self.__tokens
-
-
-class Twitter(SocialNetwork):
-    CHAR_LIMIT = 500
-    IMAGE_LIMIT = 4
-
-    def __init__(self, config):
-        super().__init__()
-        self.__user = config.user()
-        self.__tokens = config.tokens()
-        self.__client = tweepy.Client(**self.__tokens)
-
-    def publish(self):
-        reply_id = None
-        for post in self.posts():
-            response = self.__client.create_tweet(
-                    text = post.text(),
-                    in_reply_to_tweet_id = reply_id,
-                    media_ids = self.__upload(post)
-                    )
-            reply_id = response.data['id']
-
-    def __upload(self, post):
-        media_ids = None
-        images = post.images()
-        if images:
-            auth = tweepy.OAuthHandler(
-                    self.__tokens['consumer_key'],
-                    self.__tokens['consumer_secret']
-                    )
-            auth.set_access_token(
-                    self.__tokens['access_token'],
-                    self.__tokens['access_token_secret']
-                    )
-            api = tweepy.API(auth)
-
-            media_ids = []
-            for image in images:
-                media = api.media_upload(image)
-                media_ids.append(media.media_id)
-
-        return media_ids
-
-    def __str__(self):
-        return f'Twitter Account: { self.__user }'
-
-    class Config:
-        def __init__(self, **kwargs):
-            self.__user = kwargs['user']
-            self.__tokens = {
-                'consumer_key': kwargs['api_key'],
-                'consumer_secret': kwargs['api_secret'],
-                'bearer_token': kwargs['bearer_token'],
-                'access_token': kwargs['access_token'],
-                'access_token_secret': kwargs['access_token_secret']
-            }
-
-        def user(self):
-            return self.__user
-
-        def tokens(self):
-            return self.__tokens
 
 def read_config():
     accounts = []
@@ -188,6 +57,7 @@ def read_config():
 
     return accounts
 
+
 def read_messages():
     message = ''
     line = sys.stdin.readline()
@@ -201,23 +71,29 @@ def read_messages():
          line = sys.stdin.readline()
     yield Post(message.rstrip())
 
-parser = argparse.ArgumentParser(
+
+def main():
+    parser = argparse.ArgumentParser(
         prog = 'xpost.py',
         description = 'Mastodon and Twitter cross-poster'
         )
 
-parser.add_argument('-i', '--image', help = 'attach an image to post')
-args = parser.parse_args()
+    parser.add_argument('-i', '--image', help = 'attach an image to post')
+    args = parser.parse_args()
 
-accounts = read_config()
+    accounts = read_config()
 
-for post in read_messages():
+    for post in read_messages():
+        for account in accounts:
+            account.post(post)
+
+    if args.image:
+        for account in accounts:
+            account.add_image(args.image)
+
     for account in accounts:
-        account.post(post)
+        account.publish()
 
-if args.image:
-    for account in accounts:
-        account.add_image(args.image)
 
-for account in accounts:
-    account.publish()
+if __name__ == "__main__":
+    main()
