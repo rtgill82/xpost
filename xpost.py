@@ -11,15 +11,9 @@ import tweepy
 class Post:
     def __init__(self, text):
         self.__text = text
-        self.__images = None
+        self.__images = []
 
     def add_image(self, image):
-        if self.__images is None:
-            self.__images = []
-
-        if len(self.__images) > 3:
-            raise IndexError('the number of images attached to a post is limited to 4')
-
         if image not in self.__images:
             self.__images.append(image)
 
@@ -38,7 +32,7 @@ class SocialNetwork:
 
     def add_image(self, image):
         if len(self.__posts[0].images()) > self.IMAGE_LIMIT:
-            raise RuntimeError(f'image attachments are limited to { self.IMAGE_LIMIT } images')
+            raise RuntimeError(f'Image attachments are limited to { self.IMAGE_LIMIT } images.')
         self.__posts[0].add_image(image)
 
     def limit(self):
@@ -46,7 +40,7 @@ class SocialNetwork:
 
     def post(self, post):
         if len(post.text()) > self.CHAR_LIMIT:
-            raise RuntimeError(f'message length is limited to { self.CHAR_LIMIT } characters')
+            raise RuntimeError(f'Message length is limited to { self.CHAR_LIMIT } characters.')
         self.__posts.append(post)
 
     def posts(self):
