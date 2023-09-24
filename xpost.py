@@ -120,7 +120,7 @@ class Twitter(SocialNetwork):
         super().__init__()
         self.__user = config.user()
         self.__tokens = config.tokens()
-        self.__client = tweepy.Client(**tokens)
+        self.__client = tweepy.Client(**self.__tokens)
 
     def publish(self):
         reply_id = None
@@ -158,8 +158,8 @@ class Twitter(SocialNetwork):
 
     class Config:
         def __init__(self, **kwargs):
+            self.__user = kwargs['user']
             self.__tokens = {
-                'user': kwargs['user'],
                 'consumer_key': kwargs['api_key'],
                 'consumer_secret': kwargs['api_secret'],
                 'bearer_token': kwargs['bearer_token'],
@@ -168,7 +168,7 @@ class Twitter(SocialNetwork):
             }
 
         def user(self):
-            return self.__tokens['user']
+            return self.__user
 
         def tokens(self):
             return self.__tokens
