@@ -89,7 +89,7 @@ class Mastodon(SocialNetwork):
         return media_ids
 
     def __str__(self):
-        return f'{ self.__user }@Mastodon'
+        return f'Mastodon Account: { self.__user }'
 
     class Config:
         def __init__(self, **kwargs):
@@ -154,7 +154,7 @@ class Twitter(SocialNetwork):
         return media_ids
 
     def __str__(self):
-        return f'{ self.__user }@Twitter'
+        return f'Twitter Account: { self.__user }'
 
     class Config:
         def __init__(self, **kwargs):
