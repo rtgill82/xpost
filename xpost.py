@@ -86,9 +86,10 @@ def main():
         description = 'Mastodon and Twitter cross-poster'
         )
 
-    parser.add_argument('-i', '--image', help = 'attach an image to post')
-    args = parser.parse_args()
+    parser.add_argument('-i', '--image', action = 'append',
+                        help = 'attach an image to post')
 
+    args = parser.parse_args()
     accounts = read_config()
 
     for post in read_messages():
@@ -96,8 +97,9 @@ def main():
             account.post(post)
 
     if args.image:
-        for account in accounts:
-            account.add_image(args.image)
+        for image in args.image:
+            for account in accounts:
+                account.add_image(image)
 
     for account in accounts:
         account.publish()
