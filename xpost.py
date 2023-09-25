@@ -58,17 +58,25 @@ def read_config():
     return accounts
 
 
+def read_line():
+    try:
+        return sys.stdin.readline()
+    except KeyboardInterrupt:
+        sys.exit(0)
+
+
 def read_messages():
     message = ''
-    line = sys.stdin.readline()
+    line = read_line()
+
     while line:
          if line == '---\n':
              yield Post(message.rstrip())
              message = ''
-             line = sys.stdin.readline()
+             line = read_line()
              continue
          message += line
-         line = sys.stdin.readline()
+         line = read_line()
     yield Post(message.rstrip())
 
 
