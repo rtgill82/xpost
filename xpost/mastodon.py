@@ -40,12 +40,14 @@ class Mastodon(SocialNetwork):
     def __init__(self, config):
         super().__init__()
         self.__user = config.user()
-        self.__client = mastodon.Mastodon(**config.tokens())
-        self.__client.log_in(self.__user, config.password(),
-                             scopes = Mastodon.SCOPES)
+        self.__password = config.password()
+        self.__client = mastodon.Mastodon(**config.tokens(),
+                                          user_agent = 'xpost.py')
 
     def publish(self):
         reply_id = None
+
+        self.__connect()
         for post in self.posts():
             response = self.__client.status_post(
                     post.text(),
@@ -53,6 +55,10 @@ class Mastodon(SocialNetwork):
                     media_ids = self.__upload(post)
                     )
             reply_id = response.id
+
+    def __connect(self):
+        self.__client.log_in(self.__user, self.__password,
+                             scopes = Mastodon.SCOPES)
 
     def __upload(self, post):
         media_ids = None

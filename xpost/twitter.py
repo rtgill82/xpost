@@ -39,17 +39,21 @@ class Twitter(SocialNetwork):
         super().__init__()
         self.__user = config.user()
         self.__tokens = config.tokens()
-        self.__client = tweepy.Client(**self.__tokens)
 
     def publish(self):
         reply_id = None
+        client = self.__connect()
+
         for post in self.posts():
-            response = self.__client.create_tweet(
+            response = client.create_tweet(
                     text = post.text(),
                     in_reply_to_tweet_id = reply_id,
                     media_ids = self.__upload(post)
                     )
             reply_id = response.data['id']
+
+    def __connect(self):
+        return tweepy.Client(**self.__tokens)
 
     def __upload(self, post):
         media_ids = None
