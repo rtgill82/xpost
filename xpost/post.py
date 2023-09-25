@@ -27,6 +27,8 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #
 
+from copy import copy
+
 class Post:
     def __init__(self, text):
         self.__text = text
@@ -34,7 +36,7 @@ class Post:
 
     def add_image(self, image):
         if image not in self.__images:
-            self.__images.append(image)
+            self.__images.append(copy(image))
 
     def images(self):
         return self.__images
