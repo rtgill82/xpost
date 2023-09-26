@@ -58,7 +58,7 @@ class Twitter(SocialNetwork):
     def __upload(self, post):
         media_ids = None
         images = post.images()
-        if images:
+        if len(images) > 0:
             auth = tweepy.OAuthHandler(
                     self.__tokens['consumer_key'],
                     self.__tokens['consumer_secret']

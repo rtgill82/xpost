@@ -63,7 +63,7 @@ class Mastodon(SocialNetwork):
     def __upload(self, post):
         media_ids = None
         images = post.images()
-        if images:
+        if len(images) > 0:
             media_ids = []
 
             for image in images:
