@@ -27,6 +27,7 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #
 
+from xpost.bsky import Bsky
 from xpost.mastodon import Mastodon
 from xpost.post import Post
 from xpost.twitter import Twitter

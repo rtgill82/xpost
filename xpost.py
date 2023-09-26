@@ -33,7 +33,7 @@ import os
 import sys
 import tomllib
 
-from xpost import Mastodon, Post, Twitter
+from xpost import Bsky, Mastodon, Post, Twitter
 
 
 def read_config():
@@ -45,6 +45,11 @@ def read_config():
     path = f"{ home }/.xpostrc"
     with open(f'{ home }/.xpostrc', 'rb') as f:
         data = tomllib.load(f)
+        if 'bsky' in data:
+            for account in data['bsky']:
+                config = Bsky.Config(**account)
+                accounts.append(Bsky(config))
+
         if 'mastodon' in data:
             for account in data['mastodon']:
                 config = Mastodon.Config(**account)
