@@ -4,6 +4,10 @@
 # An example configuration file. It should be placed in your home directory as `.xpostrc`
 #
 
+[[bsky]]
+user = "user.bsky.social"
+password = "password"
+
 [[mastodon]]
 user = "user1@email.com"
 password = "password"
@@ -12,6 +16,7 @@ client_key = "SECRET"
 client_secret = "SECRET"
 access_token = "SECRET"
 
+# Multiple accounts per social network can be configured.
 [[mastodon]]
 user = "user2@email.com"
 password = "password"
