@@ -27,11 +27,15 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #
 
+import xpost
+from xpost.exceptions import XpostError
+
 class SocialNetwork:
     CHAR_LIMIT = 0
     IMAGE_LIMIT = 0
 
     def __init__(self):
+        self._client = None
         self.__posts = []
 
     def add_image(self, image):
@@ -49,3 +53,27 @@ class SocialNetwork:
 
     def posts(self):
         return self.__posts
+
+    def client(self):
+        return self._client
+
+    def publish(self):
+        raise NotImplementedError
+
+    def delete(self, *posts):
+        raise NotImplementedError
+
+    def _try(self, fn, *args, **kwargs):
+        exception = None
+        result = None
+
+        retries = kwargs.get('retries') or xpost.ERROR_RETRIES
+        for _ in range(retries):
+            try:
+                result = fn(*args)
+            except Exception as e:
+                raise XpostError(source = e)
+            else:
+                break
+
+        return result

@@ -32,7 +32,7 @@ import tweepy
 from xpost.social_network import SocialNetwork
 
 class Twitter(SocialNetwork):
-    CHAR_LIMIT = 500
+    CHAR_LIMIT = 280
     IMAGE_LIMIT = 4
 
     def __init__(self, config):
@@ -40,41 +40,79 @@ class Twitter(SocialNetwork):
         self.__user = config.user()
         self.__tokens = config.tokens()
 
+    def client(self):
+        self._client = self._client or tweepy.Client(**self.__tokens)
+        return self._client
+
     def publish(self):
         reply_id = None
-        client = self.__connect()
+        post_ids = []
 
         for post in self.posts():
-            response = client.create_tweet(
-                    text = post.text(),
-                    in_reply_to_tweet_id = reply_id,
-                    media_ids = self.__upload(post)
-                    )
-            reply_id = response.data['id']
+            try:
+                reply_id = self._try(self.__post, post, reply_id)
+            except Exception as e:
+                self.delete(*post_ids)
+                raise e
 
-    def __connect(self):
-        return tweepy.Client(**self.__tokens)
+            post_ids.append(reply_id)
+
+        return post_ids
+
+    def delete(self, *posts):
+        client = self.client()
+        for post in posts:
+            try:
+                self._try(client.delete_tweet, post, retries=5)
+            except Exception as e:
+                print(f'Unable to delete post: { e }.', file=sys.stderr)
+                next
+
+    def __post(self, post, reply_id = None):
+        response = self.client().create_tweet(
+                text = post.text(),
+                in_reply_to_tweet_id = reply_id,
+                media_ids = self.__upload(post)
+                )
+
+        return response.data['id']
 
     def __upload(self, post):
         media_ids = None
         images = post.images()
-        if len(images) > 0:
-            auth = tweepy.OAuthHandler(
-                    self.__tokens['consumer_key'],
-                    self.__tokens['consumer_secret']
-                    )
-            auth.set_access_token(
-                    self.__tokens['access_token'],
-                    self.__tokens['access_token_secret']
-                    )
-            api = tweepy.API(auth)
 
-            media_ids = []
+        if len(images) > 0:
+            api = self.__api_auth()
             for image in images:
-                media = api.media_upload(image)
+                media = self._try(api.media_upload, image)
                 media_ids.append(media.media_id)
 
         return media_ids
+
+    def __api_auth(self):
+        exception = None
+        api = None
+
+        for _ in range(xpost.ERROR_RETRIES):
+            try:
+                auth = tweepy.OAuthHandler(
+                        self.__tokens['consumer_key'],
+                        self.__tokens['consumer_secret']
+                        )
+                auth.set_access_token(
+                        self.__tokens['access_token'],
+                        self.__tokens['access_token_secret']
+                        )
+                api = tweepy.API(auth)
+            except Exception as e:
+                exception = XpostError(source = e)
+            else:
+                break
+
+        if exception:
+            raise exception
+
+        return api
 
     def __str__(self):
         return f'Twitter Account: { self.__user }'

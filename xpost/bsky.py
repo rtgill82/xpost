@@ -27,8 +27,7 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #
 
-from atproto import Client, exceptions, models
-
+from atproto import AtUri, Client, exceptions, models
 from xpost.social_network import SocialNetwork
 
 class Bsky(SocialNetwork):
@@ -39,22 +38,71 @@ class Bsky(SocialNetwork):
         super().__init__()
         self.__user = config.user()
         self.__password = config.password()
-        self.__client = Client()
+        self.__logged_in = False
+
+    def client(self):
+        self._client = self._client or Client()
+        if not self.__logged_in:
+            self._client.login(self.__user, self.__password)
+
+        return self._client
 
     def publish(self):
         response = None
-        client = self.__connect()
+        post_ids = []
 
+        client = self.client()
         for post in self.posts():
-            response = client.send_post(
-                    text = post.text(),
-                    reply_to = _reply_ref(response),
-                    embed = _embed_ref(client, post)
-                    )
+            try:
+                response = self._try(self._send_post, post, response)
+            except Exception as e:
+                self.delete(*post_ids)
+                raise e
 
-    def __connect(self):
-        self.__client.login(self.__user, self.__password)
-        return self.__client
+            post_ids.append(response)
+
+        return post_ids
+
+    def delete(self, *posts):
+        client = self.client()
+        for post in posts:
+            try:
+                rkey = AtUri.from_str(post.uri).rkey
+                self._try(client.delete_post, rkey, retries=5)
+            except Exception as e:
+                print(f'Unable to delete post: { e }.', file=sys.stderr)
+                next
+
+    def _send_post(self, post, response = None):
+        response = self.client().send_post(
+                text = post.text(),
+                reply_to = _reply_ref(response),
+                embed = self._embed_ref(post)
+                )
+
+        return response
+
+    def _embed_ref(self, post):
+        embed_ref = None
+        images = post.images()
+
+        client = self.client()
+        upload_blob = lambda data: client.com.atproto.repo.upload_blob(data)
+
+        if len(images) > 0:
+            image_refs = []
+            for image in images:
+                with open(image, 'rb') as f:
+                    upload = self.__try(upload_blob, f.read())
+                    image_ref = models.AppBskyEmbedImages.Image(
+                            alt = '',
+                            image = upload.blob
+                            )
+                    image_refs.append(image_ref)
+
+            embed_ref = models.AppBskyEmbedImages.Main(images=image_refs)
+
+        return embed_ref
 
     def __str__(self):
         return f'Bsky Account: { self.__user }'
@@ -71,50 +119,11 @@ class Bsky(SocialNetwork):
             return self.__password
 
 
-def _embed_ref(client, post):
-    embed_ref = None
-
-    images = post.images()
-    if len(images) > 0:
-        image_refs = []
-        for image in images:
-            with open(image, 'rb') as f:
-                upload = _upload_blob(client, f.read())
-                image_ref = models.AppBskyEmbedImages.Image(
-                        alt = '',
-                        image = upload.blob
-                        )
-                image_refs.append(image_ref)
-
-        embed_ref = models.AppBskyEmbedImages.Main(images = image_refs)
-
-    return embed_ref
-
-
 def _reply_ref(response):
     reply_ref = None
 
-    if response != None:
+    if response:
         ref = models.create_strong_ref(response)
-        reply_ref = models.AppBskyFeedPost.ReplyRef(parent = ref, root = ref)
+        reply_ref = models.AppBskyFeedPost.ReplyRef(parent=ref, root=ref)
 
     return reply_ref
-
-
-def _upload_blob(client, data):
-    exception = None
-    upload = None
-
-    for _ in range(3):
-        try:
-            upload = client.com.atproto.repo.upload_blob(data)
-        except exceptions.InvokeTimeoutError as e:
-            exception = e
-            continue
-        else:
-            break
-
-    if upload == None and Exception != None:
-        raise exception
-
-    return upload

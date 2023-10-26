@@ -27,7 +27,7 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #
 
-import mastodon
+import mastodon, sys
 
 from xpost.social_network import SocialNetwork
 
@@ -41,33 +41,61 @@ class Mastodon(SocialNetwork):
         super().__init__()
         self.__user = config.user()
         self.__password = config.password()
-        self.__client = mastodon.Mastodon(**config.tokens(),
-                                          user_agent = 'xpost.py')
+        self.__logged_in = False
+
+        self._client = mastodon.Mastodon(**config.tokens(),
+                                         user_agent = 'xpost.py')
+
+    def client(self):
+        if not self.__logged_in:
+            self._client.log_in(self.__user, self.__password,
+                                scopes = Mastodon.SCOPES)
+
+        return self._client
 
     def publish(self):
         reply_id = None
+        post_ids = []
 
-        self.__connect()
         for post in self.posts():
-            response = self.__client.status_post(
-                    post.text(),
-                    in_reply_to_id = reply_id,
-                    media_ids = self.__upload(post)
-                    )
-            reply_id = response.id
+            try:
+                reply_id = self._try(self.__post, post, reply_id)
+            except Exception as e:
+                self.delete(*post_ids)
+                raise e
 
-    def __connect(self):
-        self.__client.log_in(self.__user, self.__password,
-                             scopes = Mastodon.SCOPES)
+            post_ids.append(reply_id)
+
+        return post_ids
+
+    def delete(self, *posts):
+        client = self.client()
+        for post in posts:
+            try:
+                self._try(client.status_delete, post, retries=5)
+            except Exception as e:
+                print(f'Unable to delete post: { e }.', file=sys.stderr)
+                next
+
+    def __post(self, post, reply_id = None):
+        response = self.client().status_post(
+                post.text(),
+                in_reply_to_id = reply_id,
+                media_ids = self.__upload(post)
+                )
+
+        return response.id
 
     def __upload(self, post):
         media_ids = None
         images = post.images()
+        media_post = lambda image: self.client().media_post(image)
+
         if len(images) > 0:
             media_ids = []
 
             for image in images:
-                media = self.__client.media_post(image)
+                media = self._try(media_post, image)
                 media_ids.append(media.id)
 
         return media_ids

@@ -27,10 +27,17 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #
 
-from xpost.bsky import Bsky
-from xpost.exceptions import XpostError
-from xpost.mastodon import Mastodon
-from xpost.post import Post
-from xpost.twitter import Twitter
+class XpostError(Exception):
+    def __init__(message = '', source = None):
+        self.__message = message
+        self.__source = source
 
-ERROR_RETRIES = 3
+    def message(self):
+        return self.__message
+
+    def __str__(self):
+        if self.__source:
+            return f'{ self.__source }'
+
+        else:
+            return self.__message
