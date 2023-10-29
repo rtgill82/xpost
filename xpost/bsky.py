@@ -93,7 +93,7 @@ class Bsky(SocialNetwork):
             image_refs = []
             for image in images:
                 with open(image, 'rb') as f:
-                    upload = self.__try(upload_blob, f.read())
+                    upload = self._try(upload_blob, f.read())
                     image_ref = models.AppBskyEmbedImages.Image(
                             alt = '',
                             image = upload.blob
