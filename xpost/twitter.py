@@ -29,6 +29,7 @@
 
 import tweepy
 
+import xpost
 from xpost.social_network import SocialNetwork
 
 class Twitter(SocialNetwork):
@@ -78,7 +79,7 @@ class Twitter(SocialNetwork):
         return response.data['id']
 
     def __upload(self, post):
-        media_ids = None
+        media_ids = []
         images = post.images()
 
         if len(images) > 0:
