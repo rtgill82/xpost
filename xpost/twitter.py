@@ -79,11 +79,12 @@ class Twitter(SocialNetwork):
         return response.data['id']
 
     def __upload(self, post):
-        media_ids = []
+        media_ids = None
         images = post.images()
 
         if len(images) > 0:
             api = self.__api_auth()
+            media_ids = []
             for image in images:
                 media = self._try(api.media_upload, image)
                 media_ids.append(media.media_id)
